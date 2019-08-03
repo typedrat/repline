@@ -106,7 +106,8 @@ See <https://github.com/sdiehl/repline> for more examples.
 module System.Console.Repline (
   HaskelineT,
   runHaskelineT,
-
+  runHaskelineT',
+  
   Cmd,
   Options,
   WordCompleter,
@@ -123,6 +124,7 @@ module System.Console.Repline (
 
   runMatcher,
   evalRepl,
+  evalRepl',
   abort,
   tryAction,
   dontCrash,
@@ -272,7 +274,7 @@ evalRepl' :: (Functor m, MonadException m)  -- Terminal monad ( often IO ).
           -> HaskelineT m a                 -- ^ Initializer
           -> H.Behavior                     -- ^ Custom behavior
           -> m ()
-evalRepl banner cmd opts optsPrefix comp initz behavior = runHaskelineT' behavior _readline (initz >> monad)
+evalRepl' banner cmd opts optsPrefix comp initz behavior = runHaskelineT' behavior _readline (initz >> monad)
   where
     monad = replLoop banner cmd opts optsPrefix
     _readline = H.Settings
