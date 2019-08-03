@@ -150,6 +150,9 @@ newtype HaskelineT (m :: * -> *) a = HaskelineT { unHaskeline :: H.InputT m a }
 runHaskelineT :: MonadException m => H.Settings m -> HaskelineT m a -> m a
 runHaskelineT s m = H.runInputT s (H.withInterrupt (unHaskeline m))
 
+runHaskelineT' :: MonadException m => H.Behavior -> H.Settings m -> HaskelineT m a -> m a
+runHaskelineT' b s m = H.runInputTBehavior b s (H.withInterrupt (unHaskeline m))
+
 class MonadException m => MonadHaskeline m where
   getInputLine :: String -> m (Maybe String)
   getInputChar :: String -> m (Maybe Char)
@@ -258,6 +261,26 @@ evalRepl banner cmd opts optsPrefix comp initz = runHaskelineT _readline (initz 
       , H.historyFile    = Just ".history"
       , H.autoAddHistory = True
       }
+
+-- | As 'evalRepl', but allows the use of custom 'H.Behavior's.
+evalRepl' :: (Functor m, MonadException m)  -- Terminal monad ( often IO ).
+          => HaskelineT m String            -- ^ Banner
+          -> Command (HaskelineT m)         -- ^ Command function
+          -> Options (HaskelineT m)         -- ^ Options list and commands
+          -> Maybe Char                     -- ^ Optional command prefix ( passing Nothing ignores the Options argument )
+          -> CompleterStyle m               -- ^ Tab completion function
+          -> HaskelineT m a                 -- ^ Initializer
+          -> H.Behavior                     -- ^ Custom behavior
+          -> m ()
+evalRepl banner cmd opts optsPrefix comp initz behavior = runHaskelineT' behavior _readline (initz >> monad)
+  where
+    monad = replLoop banner cmd opts optsPrefix
+    _readline = H.Settings
+      { H.complete       = mkCompleter comp
+      , H.historyFile    = Just ".history"
+      , H.autoAddHistory = True
+      }
+
 
 -------------------------------------------------------------------------------
 -- Completions
