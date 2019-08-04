@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -133,7 +134,11 @@ module System.Console.Repline (
 ) where
 
 import System.Console.Haskeline.Completion
+#if MIN_VERSION_haskeline(0,8,0)
+import Control.Monad.Catch
+#else
 import System.Console.Haskeline.MonadException
+#endif
 import qualified System.Console.Haskeline as H
 
 import Data.List (isPrefixOf)
@@ -147,7 +152,11 @@ import Control.Monad.Reader
 -------------------------------------------------------------------------------
 
 newtype HaskelineT (m :: * -> *) a = HaskelineT { unHaskeline :: H.InputT m a }
+#if MIN_VERSION_haskeline(0,8,0)
+ deriving (Monad, Functor, Applicative, MonadIO, MonadThrow, MonadCatch, MonadMask, MonadTrans, MonadHaskeline)
+#else
  deriving (Monad, Functor, Applicative, MonadIO, MonadException, MonadTrans, MonadHaskeline)
+#endif
 
 runHaskelineT :: MonadException m => H.Settings m -> HaskelineT m a -> m a
 runHaskelineT s m = H.runInputT s (H.withInterrupt (unHaskeline m))
@@ -196,20 +205,37 @@ type WordCompleter m = (String -> m [String])
 type LineCompleter m = (String -> String -> m [Completion])
 
 -- | Wrap a HasklineT action so that if an interrupt is thrown the shell continues as normal.
+#if MIN_VERSION_haskeline(0,8,0)
+tryAction :: MonadCatch m => HaskelineT m a -> HaskelineT m a
+#else
 tryAction :: MonadException m => HaskelineT m a -> HaskelineT m a
+#endif
 tryAction (HaskelineT f) = HaskelineT (H.withInterrupt loop)
     where loop = handle (\H.Interrupt -> loop) f
 
 -- | Catch all toplevel failures.
+#if MIN_VERSION_haskeline(0,8,0)
+dontCrash :: (MonadIO m, MonadCatch m) => m () -> m ()
+#else
 dontCrash :: (MonadIO m, H.MonadException m) => m () -> m ()
-dontCrash m = H.catch m ( \ e@SomeException{} -> liftIO ( putStrLn ( show e ) ) )
+#endif
+dontCrash m = catch m ( \ e@SomeException{} -> liftIO ( putStrLn ( show e ) ) )
 
 -- | Abort the current REPL loop, and continue.
+#if MIN_VERSION_haskeline(0,8,0)
+abort :: (MonadIO m, MonadThrow m) => HaskelineT m a
+abort = throwM H.Interrupt
+#else
 abort :: MonadIO m => HaskelineT m a
 abort = throwIO H.Interrupt
+#endif
 
 -- | Completion loop.
+#if MIN_VERSION_haskeline(0,8,0)
+replLoop :: (MonadCatch m)
+#else
 replLoop :: (Functor m, MonadException m)
+#endif
          => HaskelineT m String
          -> Command (HaskelineT m)
          -> Options (HaskelineT m)
@@ -247,7 +273,11 @@ optMatcher s ((x, m):xs) args
   | otherwise = optMatcher s xs args
 
 -- | Evaluate the REPL logic into a MonadException context.
+#if MIN_VERSION_haskeline(0,8,0)
+evalRepl :: (MonadCatch m)                 -- Terminal monad ( often IO ).
+#else
 evalRepl :: (Functor m, MonadException m)  -- Terminal monad ( often IO ).
+#endif
          => HaskelineT m String            -- ^ Banner
          -> Command (HaskelineT m)         -- ^ Command function
          -> Options (HaskelineT m)         -- ^ Options list and commands
@@ -265,7 +295,11 @@ evalRepl banner cmd opts optsPrefix comp initz = runHaskelineT _readline (initz 
       }
 
 -- | As 'evalRepl', but allows the use of custom 'H.Behavior's.
+#if MIN_VERSION_haskeline(0,8,0)
+evalRepl' :: (MonadCatch m)                 -- Terminal monad ( often IO ).
+#else
 evalRepl' :: (Functor m, MonadException m)  -- Terminal monad ( often IO ).
+#endif
           => HaskelineT m String            -- ^ Banner
           -> Command (HaskelineT m)         -- ^ Command function
           -> Options (HaskelineT m)         -- ^ Options list and commands
